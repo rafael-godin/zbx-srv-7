@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:alpine-7.0-latest
+    container_name: zabbix-server
+    environment:
+      - DB_SERVER_HOST=db_host_ip_address
+      - DB_SERVER_PORT=5432
+      # Mapeamento das secrets no backend
+      - POSTGRES_USER_FILE=/run/secrets/zabbix_db_user
+      - POSTGRES_PASSWORD_FILE=/run/secrets/zabbix_db_password
+      - POSTGRES_DB=zabbix
+      - ZBX_CACHESIZE=1G
+      - ZBX_HISTORYCACHESIZE=128M
+      - ZBX_VALUECACHESIZE=200M
+    ports:
+      - "10051:10051"
+    # Criando os volumes e mapeando no backend
+    volumes:
+      - ./scripts:/usr/lib/zabbix/externalscripts:ro
+      - ./scripts:/usr/lib/zabbix/alertscripts:ro
+    # Criando os secrets
+    secrets:
+      - zabbix_db_user
+      - zabbix_db_password
+    restart: unless-stopped
+    # Configurando logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+    container_name: zabbix-web
+    environment:
+      - ZBX_SERVER_HOST=zabbix-server
+      - DB_SERVER_HOST=db_host_ip_address
+      - DB_SERVER_PORT=5432
+      # Mapeamento das secrets no frontend
+      - POSTGRES_USER_FILE=/run/secrets/zabbix_db_user
+      - POSTGRES_PASSWORD_FILE=/run/secrets/zabbix_db_password
+      - POSTGRES_DB=zabbix
+      - PHP_TZ=America/Sao_Paulo
+    ports:
+      - "80:8080"
+    depends_on:
+      - zabbix-server
+    # Criando os secrets
+    secrets:
+      - zabbix_db_user
+      - zabbix_db_password
+    restart: unless-stopped
+    # Configurando logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 10m
+        max-file: "5"
+
+secrets:
+  zabbix_db_user:
+    file: ./secrets/postgre_user.txt
+  zabbix_db_password:
+    file: ./secrets/postgre_password.txt
